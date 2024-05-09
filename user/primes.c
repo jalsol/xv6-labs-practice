@@ -1,53 +1,59 @@
 #include "kernel/types.h"
 #include "user/user.h"
 
-enum { PARENT, CHILD };
 enum { N = 35 };
+
+static void filter(int prev_fd);
 
 int main(void) {
   int pid[2];
+  pipe(pid);
 
-  int n = 0;
-  int nums[N];
+  // generate
   for (int i = 2; i <= N; ++i) {
-    nums[n++] = i;
+    write(pid[1], &i, sizeof(i));
   }
+  close(pid[1]);
 
-  int buf[N];
-  int n_buf = 0;
-
-  while (n > 0) {
-    pipe(pid);
-    int fpid = fork();
-
-    if (fpid != 0) {
-      write(pid[CHILD], nums, n * sizeof(int));
-      wait((int*) 0);
-      close(pid[PARENT]);
-      close(pid[CHILD]);
-      break;
-    }
-
-    if (fpid == 0) {
-      int bytes_read = read(pid[PARENT], buf, 4 * N);
-      n_buf = bytes_read / sizeof(int);
-      close(pid[PARENT]);
-      close(pid[CHILD]);
-
-      if (n_buf == 0) {
-        exit(1);
-      }
-
-      int head = buf[0];
-      n = 0;
-      printf("prime %d\n", head);
-      for (int i = 0; i < n_buf; ++i) {
-        if (buf[i] % head != 0) {
-          nums[n++] = buf[i];
-        }
-      }
-    }
-  }
+  filter(pid[0]);
+  close(pid[0]);
 
   exit(0);
+}
+
+void filter(int prev_fd) {
+  int pid[2];
+  pipe(pid);
+
+  int head;
+  if (read(prev_fd, &head, sizeof(head)) != sizeof(head)) {
+    close(pid[0]);
+    close(pid[1]);
+    return;
+  }
+
+  printf("prime %d\n", head);
+
+  int num = -1;
+  while (read(prev_fd, &num, sizeof(num)) == sizeof(num)) {
+    if (num % head != 0) {
+      write(pid[1], &num, sizeof(num));
+    }
+  }
+
+  if (num == -1) {
+    close(pid[0]);
+    close(pid[1]);
+    return;
+  }
+
+  if (fork()) {
+    close(pid[0]);
+    close(pid[1]);
+    wait(0);
+  } else {
+    close(pid[1]);
+    filter(pid[0]);
+    close(pid[0]);
+  }
 }
