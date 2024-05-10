@@ -303,6 +303,9 @@ fork(void)
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
+  // Copy trace mask
+  np->tracemask = p->tracemask;
+
   pid = np->pid;
 
   release(&np->lock);
@@ -653,4 +656,18 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+uint64
+getnproc(void) {
+  uint64 nproc = 0;
+  struct proc* p;
+
+  for (p = proc; p < &proc[NPROC]; ++p) {
+    if (p->state != UNUSED) {
+      ++nproc;
+    }
+  }
+
+  return nproc;
 }
